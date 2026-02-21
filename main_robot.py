@@ -15,7 +15,7 @@ original_info = sv.VideoInfo.from_video_path(video_path)
 output_info = sv.VideoInfo(width=original_info.width, height=original_info.height, fps=15)
 
 model = YOLO("models/best3.pt")
-tracker = tracking.Tracker(4)
+tracker = tracking.Tracker(velocity_alpha=0.8, max_lost_frames=5000000)
 
 palette_rgb = [
   (230, 25, 75),
@@ -42,9 +42,8 @@ with sv.VideoSink(f"output/{time.time()}.mp4", output_info) as sink:
       [(d[0] + d[2]) / 2, (d[1] + d[3]) / 2]
       for d in filtered_detections.xyxy
     ])
-    tracker.update(detections_centers)
 
-    filtered_detections.tracker_id = tracker.curr_ids
+    filtered_detections.tracker_id = tracker.update(detections_centers, frame_index)
 
     annotated_frame = frame.copy()
     annotated_frame = box_annotator.annotate(scene=annotated_frame, detections=filtered_detections)
