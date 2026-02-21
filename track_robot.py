@@ -15,7 +15,7 @@ FIELD_BOUNDS = np.array([
 ], dtype=np.int32)
 
 def get_detections(frame, model):
-  results = model(frame, verbose=False)[0]
+  results = model(frame, verbose=False, conf=0.01)[0]
   detections = sv.Detections.from_ultralytics(results)
   return detections
 

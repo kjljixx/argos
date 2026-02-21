@@ -15,7 +15,7 @@ original_info = sv.VideoInfo.from_video_path(video_path)
 output_info = sv.VideoInfo(width=original_info.width, height=original_info.height, fps=15)
 
 model = YOLO("models/best3.pt")
-tracker = tracking.Tracker(velocity_alpha=0.8, max_lost_frames=5000000)
+tracker = tracking.Tracker(velocity_alpha=0.0, max_lost_frames=5000000, max_distance=100, max_ids=4)
 
 palette_rgb = [
   (230, 25, 75),

@@ -6,14 +6,14 @@ import numpy as np
 import supervision as sv
 import time
 
-video_path = r"C:\Users\kjlji\Downloads\coftc-10tele.mp4"
+video_path = r"C:\Users\kjlji\Videos\Captures\2025-2026 Season_ Bensalem Area Qualifier - YouTube — Zen Browser 2026-02-18 20-27-14.mp4"
 
 generator = sv.get_video_frames_generator(video_path)
 
 original_info = sv.VideoInfo.from_video_path(video_path)
 output_info = sv.VideoInfo(width=original_info.width, height=original_info.height, fps=15)
 
-tracker = tracking.Tracker(velocity_alpha=0.8, max_lost_frames=0)
+tracker = tracking.Tracker(velocity_alpha=0.8, max_lost_frames=0, max_distance=100)
 
 with sv.VideoSink(f"output/{time.time()}.mp4", output_info) as sink:
   prev_frame = None
