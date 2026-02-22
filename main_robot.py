@@ -7,7 +7,7 @@ import supervision as sv
 import time
 from ultralytics import YOLO
 
-video_path = r"C:\Users\kjlji\Downloads\coftc-full.mp4"
+video_path = r"C:\Users\kjlji\Videos\Captures\2025-2026 Season_ Bensalem Area Qualifier - YouTube — Zen Browser 2026-02-18 20-27-14.mp4"
 
 generator = sv.get_video_frames_generator(video_path)
 
