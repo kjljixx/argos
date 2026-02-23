@@ -9,17 +9,17 @@ def get_purpleness(frame, xs, ys):
   hue_dist = np.minimum(hue_diff, 180 - hue_diff)
   hue_score = np.clip(1.0 - (hue_dist / 30.0), 0.0, 1.0)
   lightness_diff = np.abs(frame[ys, xs, 1].astype(np.int16) - 144)
-  lightness_score = np.clip(1.0 - (lightness_diff / 50.0), 0.0, 1.0)
+  lightness_score = np.clip(1.0 - (lightness_diff / 70.0), 0.0, 1.0)
   saturation_diff = np.abs(frame[ys, xs, 2].astype(np.int16) - 46)
-  saturation_score = np.clip(1.0 - (saturation_diff / 50.0), 0.0, 1.0)
+  saturation_score = np.clip(1.0 - (saturation_diff / 70.0), 0.0, 1.0)
   return (hue_score * lightness_score * saturation_score * 255).astype(np.uint8)
 
 def get_purple_mask(frame, prev_frame):
   hls_frame = cv2.cvtColor(frame, cv2.COLOR_BGR2HLS)
   hls_prev_frame = cv2.cvtColor(prev_frame, cv2.COLOR_BGR2HLS)
 
-  lower = np.array([145-25, 144-40, 46-70])
-  upper = np.array([145+25, 144+40, 46+70])
+  lower = np.array([145-25, 144-50, 46-50])
+  upper = np.array([145+25, 144+50, 46+50])
   mask = cv2.inRange(hls_frame, lower, upper)
 
   ys, xs = np.where(mask > 0)
@@ -35,17 +35,17 @@ def get_greenness(frame, xs, ys):
   hue_dist = np.minimum(hue_diff, 180 - hue_diff)
   hue_score = np.clip(1.0 - (hue_dist / 30.0), 0.0, 1.0)
   lightness_diff = np.abs(frame[ys, xs, 1].astype(np.int16) - 97)
-  lightness_score = np.clip(1.0 - (lightness_diff / 50.0), 0.0, 1.0)
+  lightness_score = np.clip(1.0 - (lightness_diff / 70.0), 0.0, 1.0)
   saturation_diff = np.abs(frame[ys, xs, 2].astype(np.int16) - 127)
-  saturation_score = np.clip(1.0 - (saturation_diff / 50.0), 0.0, 1.0)
+  saturation_score = np.clip(1.0 - (saturation_diff / 70.0), 0.0, 1.0)
   return (hue_score * lightness_score * saturation_score * 255).astype(np.uint8)
 
 def get_green_mask(frame, prev_frame):
   hls_frame = cv2.cvtColor(frame, cv2.COLOR_BGR2HLS)
   hls_prev_frame = cv2.cvtColor(prev_frame, cv2.COLOR_BGR2HLS)
 
-  lower = np.array([83-25, 97-40, 127-70])
-  upper = np.array([83+25, 97+40, 127+70])
+  lower = np.array([83-25, 97-50, 127-50])
+  upper = np.array([83+25, 97+50, 127+50])
   mask = cv2.inRange(hls_frame, lower, upper)
 
   ys, xs = np.where(mask > 0)

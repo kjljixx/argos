@@ -8,6 +8,8 @@ import supervision as sv
 import time
 from ultralytics import YOLO
 
+DEBUG = True
+
 video_path = r"C:\Users\kjlji\Videos\Captures\2025-2026 Season_ Bensalem Area Qualifier - YouTube — Zen Browser 2026-02-18 20-27-14.mp4"
 
 generator = sv.get_video_frames_generator(video_path)
@@ -126,21 +128,29 @@ with sv.VideoSink(f"output/{time.time()}.mp4", output_info) as sink:
     print(f"{time.time()}: Scored/Filtered")
 
     annotated_frame = frame.copy()
-    if len(prev_frames) > 0:
-      greenness = track_artifact.get_greenness(annotated_frame, np.arange(annotated_frame.shape[1]), np.arange(annotated_frame.shape[0])[:, None])
-      prev_greenness = track_artifact.get_greenness(prev_frames[0], np.arange(prev_frames[0].shape[1]), np.arange(prev_frames[0].shape[0])[:, None])
+    if DEBUG and len(prev_frames) > 0:
+      hls_frame = cv2.cvtColor(annotated_frame, cv2.COLOR_BGR2HLS)
+      hls_prev_frame = cv2.cvtColor(prev_frames[0], cv2.COLOR_BGR2HLS)
+      greenness = track_artifact.get_greenness(hls_frame, np.arange(annotated_frame.shape[1]), np.arange(annotated_frame.shape[0])[:, None])
+      prev_greenness = track_artifact.get_greenness(hls_prev_frame, np.arange(prev_frames[0].shape[1]), np.arange(prev_frames[0].shape[0])[:, None])
       diff = greenness.astype(np.int16) - prev_greenness.astype(np.int16)
-      dim_mask = (diff <= track_artifact.COLOR_DIFF_THRESHOLD)
-      overlay = np.zeros_like(annotated_frame)
-      overlay[:] = (30, 30, 30)
-      annotated_frame = np.where(dim_mask[..., None], cv2.addWeighted(annotated_frame, 0.5, overlay, 0.5, 0), annotated_frame)
+      dim_mask = (diff > track_artifact.COLOR_DIFF_THRESHOLD)
+      dim_overlay = np.zeros_like(annotated_frame)
+      dim_overlay[:] = (0, 0, 200)
+      lower = np.array([83-25, 97-40, 127-40])
+      upper = np.array([83+25, 97+40, 127+40])
+      range_mask = cv2.inRange(hls_frame, lower, upper)
+      range_overlay = np.zeros_like(annotated_frame)
+      range_overlay[:] = (200, 0, 0)
+      annotated_frame = np.where(dim_mask[..., None], cv2.addWeighted(annotated_frame, 0.5, dim_overlay, 0.5, 0), annotated_frame)
+      annotated_frame = np.where(range_mask[..., None], cv2.addWeighted(annotated_frame, 0.5, range_overlay, 0.5, 0), annotated_frame)
     for goal in GOAL_ZONES:
       cv2.polylines(annotated_frame, [goal], isClosed=True, color=(0, 255, 255), thickness=2)
     for launch_zone in LAUNCH_ZONES:
       cv2.polylines(annotated_frame, [launch_zone], isClosed=True, color=(255, 0, 255), thickness=2)
     for c, tracker_id in zip(detections, tracker_ids):
       color = (int(tracker_id) * 50 % 256, int(tracker_id) * 80 % 256, int(tracker_id) * 110 % 256)
-      cv2.drawContours(annotated_frame, [c], -1, color, 2)
+      cv2.drawContours(annotated_frame, [c], -1, color, 1)
       center = (int(c[0][0][0]), int(c[0][0][1]))
       cv2.circle(annotated_frame, center+green_tracker.tracks[int(tracker_id)]["velocity"].astype(int), 1, (0, 255), -1)
       cv2.putText(annotated_frame, str(tracker_id), center, cv2.FONT_HERSHEY_SIMPLEX, 0.5, color, 2)
