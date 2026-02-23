@@ -6,6 +6,7 @@ From a video of a match, Argos can find:
 - How many artifacts each robot scored
 - What color artifacts were scored in which order
 - For each scored artifact, at exactly what time in the match they were scored
+- Analysis can be done in real-time at ~15fps on literally any GPU paired with a decent CPU
 
 ## Usage
 *Ease of use will be improved later on*
