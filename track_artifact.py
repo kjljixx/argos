@@ -2,7 +2,7 @@ import cv2
 import numpy as np
 
 COLOR_DIFF_THRESHOLD = 20
-MIN_AREA_THRESHOLD = 70
+MIN_AREA_THRESHOLD = 20
 
 def get_purpleness(frame):
   frame = cv2.cvtColor(frame, cv2.COLOR_BGR2HLS)
@@ -16,8 +16,8 @@ def get_purpleness(frame):
   return (hue_score * lightness_score * saturation_score * 255).astype(np.uint8)
 
 def get_purple_mask(frame, prev_frame):
-  lower = np.array([145-25, 144-32, 46-32])
-  upper = np.array([145+25, 144+32, 46+32])
+  lower = np.array([145-25, 144-40, 46-40])
+  upper = np.array([145+25, 144+40, 46+40])
   mask = cv2.inRange(cv2.cvtColor(frame, cv2.COLOR_BGR2HLS), lower, upper)
 
   purpleness = get_purpleness(frame)
@@ -29,7 +29,7 @@ def get_purple_mask(frame, prev_frame):
 
 def get_greenness(frame):
   frame = cv2.cvtColor(frame, cv2.COLOR_BGR2HLS)
-  hue_diff = np.abs(frame[:, :, 0].astype(np.int16) - 116)
+  hue_diff = np.abs(frame[:, :, 0].astype(np.int16) - 83)
   hue_dist = np.minimum(hue_diff, 180 - hue_diff)
   hue_score = np.clip(1.0 - (hue_dist / 30.0), 0.0, 1.0)
   lightness_diff = np.abs(frame[:, :, 1].astype(np.int16) - 97)
@@ -39,8 +39,8 @@ def get_greenness(frame):
   return (hue_score * lightness_score * saturation_score * 255).astype(np.uint8)
 
 def get_green_mask(frame, prev_frame):
-  lower = np.array([116-25, 97-32, 127-32])
-  upper = np.array([116+25, 97+32, 127+32])
+  lower = np.array([83-25, 97-40, 127-40])
+  upper = np.array([83+25, 97+40, 127+40])
   mask = cv2.inRange(cv2.cvtColor(frame, cv2.COLOR_BGR2HLS), lower, upper)
 
   greenness = get_greenness(frame)
@@ -50,13 +50,22 @@ def get_green_mask(frame, prev_frame):
   mask = mask & (diff > COLOR_DIFF_THRESHOLD)
   return mask
 
-def get_detections(frame, prev_frame):
-  mask = get_purple_mask(frame, prev_frame) # | get_green_mask(frame, prev_frame)
+def get_purple_detections(frame, prev_frame):
+  mask = get_purple_mask(frame, prev_frame)
 
-  kernel = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (5, 5))
+  kernel = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (2, 2))
   mask_u8 = cv2.morphologyEx(mask.astype(np.uint8), cv2.MORPH_OPEN, kernel)
-  mask_u8 = cv2.dilate(mask_u8, kernel, iterations=1)
-  contours, _ = cv2.findContours(mask_u8, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
-  contours = [c for c in contours if cv2.contourArea(c) > MIN_AREA_THRESHOLD]
+  purple_contours, _ = cv2.findContours(mask_u8, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+  purple_contours = [c for c in purple_contours if cv2.contourArea(c) > MIN_AREA_THRESHOLD]
 
-  return contours
+  return purple_contours
+
+def get_green_detections(frame, prev_frame):
+  mask = get_green_mask(frame, prev_frame)
+
+  kernel = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (2, 2))
+  mask_u8 = cv2.morphologyEx(mask.astype(np.uint8), cv2.MORPH_OPEN, kernel)
+  green_contours, _ = cv2.findContours(mask_u8, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+  green_contours = [c for c in green_contours if cv2.contourArea(c) > MIN_AREA_THRESHOLD]
+
+  return green_contours

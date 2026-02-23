@@ -21,14 +21,20 @@ class Tracker:
     curr_ids = np.array(list(self.tracks.keys()))
     curr_coords = np.array([self.tracks[tracker_id]['coords'] for tracker_id in curr_ids])
     curr_velocities = np.array([self.tracks[tracker_id]['velocity'] for tracker_id in curr_ids])
+    curr_is_new = np.array([self.tracks[tracker_id]['is_new'] for tracker_id in curr_ids])
+
     if len(curr_coords) > 0:
       pred_coords = curr_coords + curr_velocities
       cost = np.sum((detection_coords[:, None] - pred_coords[None]) ** 2, axis=2)
       if self.max_distance is not None:
-        cost[np.sqrt(cost) > self.max_distance] = 1e9
+        cost[(np.sqrt(cost) > self.max_distance) &
+             (~(curr_is_new[None, :] & (np.sqrt(cost) <= self.max_distance*2)))] = 1e9
       row_ind, col_ind = scipy.optimize.linear_sum_assignment(cost)
       if self.max_distance is not None:
-        valid = np.sqrt(np.sum((detection_coords[row_ind] - pred_coords[col_ind]) ** 2, axis=1)) <= self.max_distance
+        valid = (
+          (np.sqrt(np.sum((detection_coords[row_ind] - pred_coords[col_ind]) ** 2, axis=1)) <= self.max_distance) |
+          (curr_is_new[col_ind] & (np.sqrt(np.sum((detection_coords[row_ind] - pred_coords[col_ind]) ** 2, axis=1)) <= self.max_distance*2))
+        )
         row_ind, col_ind = row_ind[valid], col_ind[valid]
       new_ids = np.full(len(detection_coords), -1, dtype=int)
       new_ids[row_ind] = curr_ids[col_ind]
@@ -55,11 +61,13 @@ class Tracker:
         vel = self.velocity_alpha*(coords - self.tracks[tracker_id]['coords']) + (1-self.velocity_alpha)*self.tracks[tracker_id]['velocity']
       updated_tracks[tracker_id] = {'coords': coords,
                                     'velocity': vel,
+                                    'is_new': True if tracker_id not in self.tracks else False,
                                     'last_seen': frame_num}
     
     unseen_ids = curr_ids[~np.isin(curr_ids, new_ids)]
     for tracker_id in unseen_ids:
       if frame_num - self.tracks[tracker_id]['last_seen'] < self.max_lost_frames:
         updated_tracks[tracker_id] = self.tracks[tracker_id]
+        updated_tracks[tracker_id]['is_new'] = False
     self.tracks = updated_tracks
     return new_ids
