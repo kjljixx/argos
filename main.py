@@ -10,7 +10,7 @@ from ultralytics import YOLO
 
 DEBUG = True
 
-video_path = r"C:\Users\kjlji\Videos\Captures\2025-2026 Season_ Bensalem Area Qualifier - YouTube — Zen Browser 2026-02-18 20-27-14.mp4"
+video_path = r"C:\Users\kjlji\Videos\Captures\2025-2026 Season_ Bensalem Area Qualifier - YouTube — Zen Browser 2026-02-18 20-27-14 decimated.mp4"
 
 generator = sv.get_video_frames_generator(video_path)
 
@@ -21,12 +21,15 @@ purple_tracker = tracking.Tracker(velocity_alpha=0.95, max_lost_frames=0, max_di
 green_tracker = tracking.Tracker(velocity_alpha=0.95, max_lost_frames=0, max_distance=50)
 
 GOAL_ZONES = [
-  np.array([
-    [67, 384],
-    [126, 343],
-    [139, 345],
-    [160, 432],
-  ])
+  np.array([[ 52, 373],
+       [ 64, 373],
+       [ 69, 389],
+       [162, 434],
+       [140, 346],
+       [125, 346],
+       [125, 330],
+       [ 65, 365],
+       [ 57, 356]])
 ]
 
 LAUNCH_ZONES = [
@@ -145,8 +148,8 @@ with sv.VideoSink(f"output/{time.time()}.mp4", output_info) as sink:
             ) >= 0
             if in_goal:
               goal_scores[goal_index] += 1
-              if ("purple", tracker_id) in artifact_id_to_robot_id:
-                robot_scores[artifact_id_to_robot_id[("purple", tracker_id)]] += 1
+              if ("green", tracker_id) in artifact_id_to_robot_id:
+                robot_scores[artifact_id_to_robot_id[("green", tracker_id)]] += 1
       to_remove = set()
       for tracker_id in green_tracker_ids:
         if tracker_id not in prev_green_tracker_ids:
@@ -158,7 +161,7 @@ with sv.VideoSink(f"output/{time.time()}.mp4", output_info) as sink:
               closest_robot_dist = dist
               closest_robot_id = robot_id
           if closest_robot_id is not None and closest_robot_dist < 100:
-            artifact_id_to_robot_id[("purple", tracker_id)] = closest_robot_id
+            artifact_id_to_robot_id[("green", tracker_id)] = closest_robot_id
 
           to_remove.add(tracker_id)
           for lz_index, launch_zone in enumerate(LAUNCH_ZONES):
