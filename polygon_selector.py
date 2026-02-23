@@ -50,6 +50,7 @@ def load_frame(path):
 PATH = r"C:\Users\kjlji\Videos\Captures\2025-2026 Season_ Bensalem Area Qualifier - YouTube — Zen Browser 2026-02-18 20-27-14.mp4"
 
 img = load_frame(PATH)
+img = cv2.resize(img, (640, 640))
 cv2.namedWindow("Polygon Picker")
 cv2.setMouseCallback("Polygon Picker", mouse_cb)
 redraw()
@@ -76,4 +77,4 @@ if current_polygon and len(current_polygon) >= 3:
 print(f"\n{len(polygons)} polygon(s):\n")
 for i, poly in enumerate(polygons):
   arr = np.array(poly, dtype=np.int32)
-  print(f"polygon_{i} = {repr(arr)}\n")
+  print(f"{repr(arr)}\n")

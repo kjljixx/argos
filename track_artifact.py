@@ -18,8 +18,8 @@ def get_purple_mask(frame, prev_frame):
   hls_frame = cv2.cvtColor(frame, cv2.COLOR_BGR2HLS)
   hls_prev_frame = cv2.cvtColor(prev_frame, cv2.COLOR_BGR2HLS)
 
-  lower = np.array([145-25, 144-40, 46-40])
-  upper = np.array([145+25, 144+40, 46+40])
+  lower = np.array([145-25, 144-40, 46-70])
+  upper = np.array([145+25, 144+40, 46+70])
   mask = cv2.inRange(hls_frame, lower, upper)
 
   ys, xs = np.where(mask > 0)
@@ -44,8 +44,8 @@ def get_green_mask(frame, prev_frame):
   hls_frame = cv2.cvtColor(frame, cv2.COLOR_BGR2HLS)
   hls_prev_frame = cv2.cvtColor(prev_frame, cv2.COLOR_BGR2HLS)
 
-  lower = np.array([83-25, 97-40, 127-40])
-  upper = np.array([83+25, 97+40, 127+40])
+  lower = np.array([83-25, 97-40, 127-70])
+  upper = np.array([83+25, 97+40, 127+70])
   mask = cv2.inRange(hls_frame, lower, upper)
 
   ys, xs = np.where(mask > 0)
