@@ -17,6 +17,7 @@ generator = sv.get_video_frames_generator(video_path)
 original_info = sv.VideoInfo.from_video_path(video_path)
 output_info = sv.VideoInfo(width=original_info.width, height=original_info.height, fps=30)
 
+purple_tracker = tracking.Tracker(velocity_alpha=0.95, max_lost_frames=0, max_distance=50)
 green_tracker = tracking.Tracker(velocity_alpha=0.95, max_lost_frames=0, max_distance=50)
 
 GOAL_ZONES = [
@@ -60,8 +61,10 @@ box_annotator = sv.RoundBoxAnnotator(color=palette, color_lookup=sv.annotators.u
 
 with sv.VideoSink(f"output/{time.time()}.mp4", output_info) as sink:
   prev_frames = []
-  prev_tracker_ids = None
-  prev_tracks = None
+  prev_purple_tracker_ids = None
+  prev_green_tracker_ids = None
+  prev_purple_tracks = None
+  prev_green_tracks = None
   goal_scores = [0 for _ in GOAL_ZONES]
   robot_scores = [0 for _ in range(4)]
   artifact_id_to_robot_id = {}
@@ -74,35 +77,79 @@ with sv.VideoSink(f"output/{time.time()}.mp4", output_info) as sink:
     print(f"{time.time()} Current goal scores: {goal_scores}")
 
     frame = cv2.resize(frame, (640, 640))
-    detections = track_artifact.get_green_detections(frame, prev_frames[0] if len(prev_frames) > 0 else frame)
+    purple_detections = track_artifact.get_purple_detections(frame, prev_frames[0] if len(prev_frames) > 0 else frame)
+    green_detections = track_artifact.get_green_detections(frame, prev_frames[0] if len(prev_frames) > 0 else frame)
 
-    print(f"{time.time()} Got {len(detections)} artifact detections")
+    print(f"{time.time()} Got {len(purple_detections)} purple detections and {len(green_detections)} green detections")
 
-    moments = [cv2.moments(c) for c in detections]
-    detections_centers = np.array([
+    purple_moments = [cv2.moments(c) for c in purple_detections]
+    purple_detections_centers = np.array([
       [m['m10'] / m['m00'], m['m01'] / m['m00']]
-      for m in moments
+      for m in purple_moments
     ])
+    purple_tracker_ids = purple_tracker.update(purple_detections_centers, frame_index)
 
-    tracker_ids = green_tracker.update(detections_centers, frame_index)
+    green_moments = [cv2.moments(c) for c in green_detections]
+    green_detections_centers = np.array([
+      [m['m10'] / m['m00'], m['m01'] / m['m00']]
+      for m in green_moments
+    ])
+    green_tracker_ids = green_tracker.update(green_detections_centers, frame_index)
 
     print(f"{time.time()} Updated tracker, now tracking {len(green_tracker.tracks)} artifacts")
 
-    if prev_tracker_ids is not None:
-      assert prev_tracks is not None
-      for tracker_id in prev_tracker_ids:
-        if tracker_id not in tracker_ids:
+    if prev_purple_tracker_ids is not None:
+      assert prev_purple_tracks is not None
+      for tracker_id in prev_purple_tracker_ids:
+        if tracker_id not in purple_tracker_ids:
           for goal_index, goal in enumerate(GOAL_ZONES):
             in_goal = cv2.pointPolygonTest(
-              goal, (prev_tracks[int(tracker_id)]["coords"][0], prev_tracks[int(tracker_id)]["coords"][1]), False
+              goal, (prev_purple_tracks[int(tracker_id)]["coords"][0], prev_purple_tracks[int(tracker_id)]["coords"][1]), False
             ) >= 0
             if in_goal:
               goal_scores[goal_index] += 1
-              if tracker_id in artifact_id_to_robot_id:
-                robot_scores[artifact_id_to_robot_id[tracker_id]] += 1
+              if ("purple", tracker_id) in artifact_id_to_robot_id:
+                robot_scores[artifact_id_to_robot_id[("purple", tracker_id)]] += 1
       to_remove = set()
-      for tracker_id in tracker_ids:
-        if tracker_id not in prev_tracker_ids:
+      for tracker_id in purple_tracker_ids:
+        if tracker_id not in prev_purple_tracker_ids:
+          closest_robot_id = None
+          closest_robot_dist = float('inf')
+          for robot_id, robot_track in robot_tracker.tracks.items():
+            dist = np.linalg.norm(robot_track["coords"] - purple_tracker.tracks[int(tracker_id)]["coords"])
+            if dist < closest_robot_dist:
+              closest_robot_dist = dist
+              closest_robot_id = robot_id
+          if closest_robot_id is not None and closest_robot_dist < 100:
+            artifact_id_to_robot_id[("purple", tracker_id)] = closest_robot_id
+
+          to_remove.add(tracker_id)
+          for lz_index, launch_zone in enumerate(LAUNCH_ZONES):
+            in_launch_zone = cv2.pointPolygonTest(
+              launch_zone, (purple_tracker.tracks[int(tracker_id)]["coords"][0], purple_tracker.tracks[int(tracker_id)]["coords"][1]), False
+            ) >= 0
+            if in_launch_zone:
+              to_remove.remove(tracker_id)
+      for tracker_id in to_remove:
+        del purple_tracker.tracks[tracker_id]
+      purple_detections = [c for c, tracker_id in zip(purple_detections, purple_tracker_ids) if tracker_id not in to_remove]
+      purple_tracker_ids = np.array([tracker_id for tracker_id in purple_tracker_ids if tracker_id not in to_remove])
+
+    if prev_green_tracker_ids is not None:
+      assert prev_green_tracks is not None
+      for tracker_id in prev_green_tracker_ids:
+        if tracker_id not in green_tracker_ids:
+          for goal_index, goal in enumerate(GOAL_ZONES):
+            in_goal = cv2.pointPolygonTest(
+              goal, (prev_green_tracks[int(tracker_id)]["coords"][0], prev_green_tracks[int(tracker_id)]["coords"][1]), False
+            ) >= 0
+            if in_goal:
+              goal_scores[goal_index] += 1
+              if ("purple", tracker_id) in artifact_id_to_robot_id:
+                robot_scores[artifact_id_to_robot_id[("purple", tracker_id)]] += 1
+      to_remove = set()
+      for tracker_id in green_tracker_ids:
+        if tracker_id not in prev_green_tracker_ids:
           closest_robot_id = None
           closest_robot_dist = float('inf')
           for robot_id, robot_track in robot_tracker.tracks.items():
@@ -111,7 +158,7 @@ with sv.VideoSink(f"output/{time.time()}.mp4", output_info) as sink:
               closest_robot_dist = dist
               closest_robot_id = robot_id
           if closest_robot_id is not None and closest_robot_dist < 100:
-            artifact_id_to_robot_id[tracker_id] = closest_robot_id
+            artifact_id_to_robot_id[("purple", tracker_id)] = closest_robot_id
 
           to_remove.add(tracker_id)
           for lz_index, launch_zone in enumerate(LAUNCH_ZONES):
@@ -122,8 +169,8 @@ with sv.VideoSink(f"output/{time.time()}.mp4", output_info) as sink:
               to_remove.remove(tracker_id)
       for tracker_id in to_remove:
         del green_tracker.tracks[tracker_id]
-      detections = [c for c, tracker_id in zip(detections, tracker_ids) if tracker_id not in to_remove]
-      tracker_ids = np.array([tracker_id for tracker_id in tracker_ids if tracker_id not in to_remove])
+      green_detections = [c for c, tracker_id in zip(green_detections, green_tracker_ids) if tracker_id not in to_remove]
+      green_tracker_ids = np.array([tracker_id for tracker_id in green_tracker_ids if tracker_id not in to_remove])
 
     print(f"{time.time()}: Scored/Filtered")
 
@@ -148,7 +195,13 @@ with sv.VideoSink(f"output/{time.time()}.mp4", output_info) as sink:
       cv2.polylines(annotated_frame, [goal], isClosed=True, color=(0, 255, 255), thickness=2)
     for launch_zone in LAUNCH_ZONES:
       cv2.polylines(annotated_frame, [launch_zone], isClosed=True, color=(255, 0, 255), thickness=2)
-    for c, tracker_id in zip(detections, tracker_ids):
+    for c, tracker_id in zip(purple_detections, purple_tracker_ids):
+      color = (int(tracker_id) * 50 % 256, int(tracker_id) * 80 % 256, int(tracker_id) * 110 % 256)
+      cv2.drawContours(annotated_frame, [c], -1, color, 1)
+      center = (int(c[0][0][0]), int(c[0][0][1]))
+      cv2.circle(annotated_frame, center+purple_tracker.tracks[int(tracker_id)]["velocity"].astype(int), 1, (0, 255), -1)
+      cv2.putText(annotated_frame, str(tracker_id), center, cv2.FONT_HERSHEY_SIMPLEX, 0.5, color, 2)
+    for c, tracker_id in zip(green_detections, green_tracker_ids):
       color = (int(tracker_id) * 50 % 256, int(tracker_id) * 80 % 256, int(tracker_id) * 110 % 256)
       cv2.drawContours(annotated_frame, [c], -1, color, 1)
       center = (int(c[0][0][0]), int(c[0][0][1]))
@@ -161,8 +214,10 @@ with sv.VideoSink(f"output/{time.time()}.mp4", output_info) as sink:
       prev_frames.append(frame)
     else:
       prev_frames = prev_frames[1:] + [frame]
-    prev_tracker_ids = tracker_ids
-    prev_tracks = green_tracker.tracks.copy()
+    prev_purple_tracker_ids = purple_tracker_ids
+    prev_green_tracker_ids = green_tracker_ids
+    prev_purple_tracks = purple_tracker.tracks.copy()
+    prev_green_tracks = green_tracker.tracks.copy()
 
     if frame_index % round(original_info.fps / 15) == 0:
       print(f"{time.time()} Processing frame {frame_index}")
