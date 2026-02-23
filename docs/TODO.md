@@ -1,0 +1,6 @@
+- Use the initial calculated velocity of an artifact to backwards calculate the position of the artifact one frame before it was first detected, and use that to determine which robot shot the artifact
+- Don't lose an artifact detection if the artifact experiences sudden acceleration (i.e. hits the goal/bounces back)
+- Improve robot detection model
+  - Potentially use mosaic data generation?
+  - Bigger net?
+  - higher resolution?
