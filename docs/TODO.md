@@ -4,3 +4,4 @@
   - Potentially use mosaic data generation?
   - Bigger net?
   - higher resolution?
+- update `main_artifact.py` and `main_robot.py`
