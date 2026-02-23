@@ -10,11 +10,9 @@ from ultralytics import YOLO
 
 DEBUG = True
 
-video_path = r"C:\Users\kjlji\Videos\Captures\2025-2026 Season_ Bensalem Area Qualifier - YouTube — Zen Browser 2026-02-18 20-27-14 decimated.mp4"
+VIDEO_PATH = r"C:\Users\kjlji\Videos\Captures\2025-2026 Season_ Bensalem Area Qualifier - YouTube — Zen Browser 2026-02-18 20-27-14 decimated.mp4"
 
-generator = sv.get_video_frames_generator(video_path)
-
-original_info = sv.VideoInfo.from_video_path(video_path)
+original_info = sv.VideoInfo.from_video_path(VIDEO_PATH)
 output_info = sv.VideoInfo(width=original_info.width, height=original_info.height, fps=30)
 
 purple_tracker = tracking.Tracker(velocity_alpha=0.95, max_lost_frames=0, max_distance=50)
@@ -53,31 +51,24 @@ LAUNCH_ZONES = [
 model = YOLO("models/best3.pt")
 robot_tracker = tracking.Tracker(velocity_alpha=0.0, max_lost_frames=5000000, max_distance=100, max_ids=4)
 
-palette_rgb = [
-  (230, 25, 75),
-  (60, 180, 75),
-  (0, 130, 200),
-  (255, 225, 25),
-]
-palette = sv.ColorPalette([sv.Color(*c) for c in palette_rgb])
-box_annotator = sv.RoundBoxAnnotator(color=palette, color_lookup=sv.annotators.utils.ColorLookup.TRACK, thickness=2)
+def process_video():
+  generator = sv.get_video_frames_generator(VIDEO_PATH)
 
-with sv.VideoSink(f"output/{time.time()}.mp4", output_info) as sink:
   prev_frames = []
   prev_purple_tracker_ids = None
   prev_green_tracker_ids = None
   prev_purple_tracks = None
   prev_green_tracks = None
-  goal_scores = [0 for _ in GOAL_ZONES]
-  robot_scores = [0 for _ in range(4)]
+  scores = []
   artifact_id_to_robot_id = {}
   filtered_detections = None
   for frame_index, frame in enumerate(generator):
     if frame_index % round(original_info.fps / 30) > 0:
       continue
+    if frame_index > 500:
+      break
     
     print(f"{time.time()} Processing frame {frame_index}")
-    print(f"{time.time()} Current goal scores: {goal_scores}")
 
     frame = cv2.resize(frame, (640, 640))
     purple_detections = track_artifact.get_purple_detections(frame, prev_frames[0] if len(prev_frames) > 0 else frame)
@@ -110,9 +101,7 @@ with sv.VideoSink(f"output/{time.time()}.mp4", output_info) as sink:
               goal, (prev_purple_tracks[int(tracker_id)]["coords"][0], prev_purple_tracks[int(tracker_id)]["coords"][1]), False
             ) >= 0
             if in_goal:
-              goal_scores[goal_index] += 1
-              if ("purple", tracker_id) in artifact_id_to_robot_id:
-                robot_scores[artifact_id_to_robot_id[("purple", tracker_id)]] += 1
+              scores.append((frame_index, "purple", goal_index, artifact_id_to_robot_id[("purple", tracker_id)] if ("purple", tracker_id) in artifact_id_to_robot_id else None))
       to_remove = set()
       for tracker_id in purple_tracker_ids:
         if tracker_id not in prev_purple_tracker_ids:
@@ -147,9 +136,7 @@ with sv.VideoSink(f"output/{time.time()}.mp4", output_info) as sink:
               goal, (prev_green_tracks[int(tracker_id)]["coords"][0], prev_green_tracks[int(tracker_id)]["coords"][1]), False
             ) >= 0
             if in_goal:
-              goal_scores[goal_index] += 1
-              if ("green", tracker_id) in artifact_id_to_robot_id:
-                robot_scores[artifact_id_to_robot_id[("green", tracker_id)]] += 1
+              scores.append((frame_index, "green", goal_index, artifact_id_to_robot_id[("green", tracker_id)] if ("green", tracker_id) in artifact_id_to_robot_id else None))
       to_remove = set()
       for tracker_id in green_tracker_ids:
         if tracker_id not in prev_green_tracker_ids:
@@ -176,42 +163,6 @@ with sv.VideoSink(f"output/{time.time()}.mp4", output_info) as sink:
       green_tracker_ids = np.array([tracker_id for tracker_id in green_tracker_ids if tracker_id not in to_remove])
 
     print(f"{time.time()}: Scored/Filtered")
-
-    annotated_frame = frame.copy()
-    if DEBUG and len(prev_frames) > 0:
-      hls_frame = cv2.cvtColor(annotated_frame, cv2.COLOR_BGR2HLS)
-      hls_prev_frame = cv2.cvtColor(prev_frames[0], cv2.COLOR_BGR2HLS)
-      greenness = track_artifact.get_greenness(hls_frame, np.arange(annotated_frame.shape[1]), np.arange(annotated_frame.shape[0])[:, None])
-      prev_greenness = track_artifact.get_greenness(hls_prev_frame, np.arange(prev_frames[0].shape[1]), np.arange(prev_frames[0].shape[0])[:, None])
-      diff = greenness.astype(np.int16) - prev_greenness.astype(np.int16)
-      dim_mask = (diff > track_artifact.COLOR_DIFF_THRESHOLD)
-      dim_overlay = np.zeros_like(annotated_frame)
-      dim_overlay[:] = (0, 0, 200)
-      lower = np.array([83-25, 97-40, 127-40])
-      upper = np.array([83+25, 97+40, 127+40])
-      range_mask = cv2.inRange(hls_frame, lower, upper)
-      range_overlay = np.zeros_like(annotated_frame)
-      range_overlay[:] = (200, 0, 0)
-      annotated_frame = np.where(dim_mask[..., None], cv2.addWeighted(annotated_frame, 0.5, dim_overlay, 0.5, 0), annotated_frame)
-      annotated_frame = np.where(range_mask[..., None], cv2.addWeighted(annotated_frame, 0.5, range_overlay, 0.5, 0), annotated_frame)
-    for goal in GOAL_ZONES:
-      cv2.polylines(annotated_frame, [goal], isClosed=True, color=(0, 255, 255), thickness=2)
-    for launch_zone in LAUNCH_ZONES:
-      cv2.polylines(annotated_frame, [launch_zone], isClosed=True, color=(255, 0, 255), thickness=2)
-    for c, tracker_id in zip(purple_detections, purple_tracker_ids):
-      color = (int(tracker_id) * 50 % 256, int(tracker_id) * 80 % 256, int(tracker_id) * 110 % 256)
-      cv2.drawContours(annotated_frame, [c], -1, color, 1)
-      center = (int(c[0][0][0]), int(c[0][0][1]))
-      cv2.circle(annotated_frame, center+purple_tracker.tracks[int(tracker_id)]["velocity"].astype(int), 1, (0, 255), -1)
-      cv2.putText(annotated_frame, str(tracker_id), center, cv2.FONT_HERSHEY_SIMPLEX, 0.5, color, 2)
-    for c, tracker_id in zip(green_detections, green_tracker_ids):
-      color = (int(tracker_id) * 50 % 256, int(tracker_id) * 80 % 256, int(tracker_id) * 110 % 256)
-      cv2.drawContours(annotated_frame, [c], -1, color, 1)
-      center = (int(c[0][0][0]), int(c[0][0][1]))
-      cv2.circle(annotated_frame, center+green_tracker.tracks[int(tracker_id)]["velocity"].astype(int), 1, (0, 255), -1)
-      cv2.putText(annotated_frame, str(tracker_id), center, cv2.FONT_HERSHEY_SIMPLEX, 0.5, color, 2)
-
-    print(f"{time.time()}: Annotated")
 
     if len(prev_frames) < 2:
       prev_frames.append(frame)
@@ -241,14 +192,46 @@ with sv.VideoSink(f"output/{time.time()}.mp4", output_info) as sink:
       filtered_detections.tracker_id = robot_tracker.update(detections_centers, frame_index)
 
       print(f"{time.time()} Updated robot tracker, now tracking {len(robot_tracker.tracks)} robots")
+  return scores
 
-    annotated_frame = box_annotator.annotate(scene=annotated_frame, detections=filtered_detections)
+palette_rgb = [
+  (230, 25, 75),
+  (60, 180, 75),
+  (0, 130, 200),
+  (255, 225, 25),
+]
+palette = sv.ColorPalette([sv.Color(*c) for c in palette_rgb])
+box_annotator = sv.RoundBoxAnnotator(color=palette, color_lookup=sv.annotators.utils.ColorLookup.TRACK, thickness=2)
+
+with sv.VideoSink(f"output/{time.time()}.mp4", output_info) as sink:
+  scores = process_video()
+  print(scores)
+  generator = sv.get_video_frames_generator(VIDEO_PATH)
+
+  score_index = 0
+  for frame_index, frame in enumerate(generator):
+    if frame_index % round(original_info.fps / 30) > 0:
+      continue
+    if frame_index > 500:
+      break
     
-    print(f"{time.time()}: Annotated robots")
+    print(f"{time.time()} Annotating frame {frame_index}")
 
+    frame = cv2.resize(frame, (640, 640))
+
+    annotated_frame = frame.copy()
+    for goal in GOAL_ZONES:
+      cv2.polylines(annotated_frame, [goal], isClosed=True, color=(0, 255, 255), thickness=2)
+    for launch_zone in LAUNCH_ZONES:
+      cv2.polylines(annotated_frame, [launch_zone], isClosed=True, color=(255, 0, 255), thickness=2)
     annotated_frame = cv2.resize(annotated_frame, (original_info.width, original_info.height))
-    annotated_frame = cv2.putText(annotated_frame, f"{goal_scores}", (300, 800), cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 255, 255), 2)
-    annotated_frame = cv2.putText(annotated_frame, f"{robot_scores}", (300, 850), cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 255, 255), 2)
-    sink.write_frame(annotated_frame)
 
-    print(f"{time.time()}: Wrote frame")
+    pos_idx = 0
+    while score_index < len(scores) and scores[score_index][0] <= frame_index:
+        score = scores[score_index]
+        text = f"{score[1]} scored in goal {score[2]}" + (f" by robot {score[3]}" if score[3] is not None else "")
+        cv2.putText(annotated_frame, text, (10, 30 + pos_idx * 30), cv2.FONT_HERSHEY_SIMPLEX, 1, (255, 255, 255), 2)
+        score_index += 1
+        pos_idx += 1
+    sink.write_frame(annotated_frame)
+  print(scores)
