@@ -65,8 +65,6 @@ def process_video():
   for frame_index, frame in enumerate(generator):
     if frame_index % round(original_info.fps / 30) > 0:
       continue
-    if frame_index > 500:
-      break
     
     print(f"{time.time()} Processing frame {frame_index}")
 
@@ -212,8 +210,6 @@ with sv.VideoSink(f"output/{time.time()}.mp4", output_info) as sink:
   for frame_index, frame in enumerate(generator):
     if frame_index % round(original_info.fps / 30) > 0:
       continue
-    if frame_index > 500:
-      break
     
     print(f"{time.time()} Annotating frame {frame_index}")
 
