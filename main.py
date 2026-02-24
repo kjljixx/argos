@@ -90,75 +90,52 @@ def process_video():
 
     print(f"{time.time()} Updated tracker, now tracking {len(green_tracker.tracks)} artifacts")
 
-    if prev_purple_tracker_ids is not None:
-      assert prev_purple_tracks is not None
-      for tracker_id in prev_purple_tracker_ids:
-        if tracker_id not in purple_tracker_ids:
+    def handle_tracker_removals(prev_tracker_ids, prev_tracks, tracker_ids, color):
+      for tracker_id in prev_tracker_ids:
+        if tracker_id not in tracker_ids:
           for goal_index, goal in enumerate(GOAL_ZONES):
             in_goal = cv2.pointPolygonTest(
-              goal, (prev_purple_tracks[int(tracker_id)]["coords"][0], prev_purple_tracks[int(tracker_id)]["coords"][1]), False
+              goal, (prev_tracks[int(tracker_id)]["coords"][0], prev_tracks[int(tracker_id)]["coords"][1]), False
             ) >= 0
             if in_goal:
-              scores.append((frame_index, "purple", goal_index, artifact_id_to_robot_id[("purple", tracker_id)] if ("purple", tracker_id) in artifact_id_to_robot_id else None))
+              scores.append((frame_index, color, goal_index, artifact_id_to_robot_id[(color, tracker_id)] if (color, tracker_id) in artifact_id_to_robot_id else None))
+    
+    def handle_tracker_additions(prev_tracker_ids, prev_tracks, tracker_ids, tracks, detections, color):
       to_remove = set()
-      for tracker_id in purple_tracker_ids:
-        if tracker_id not in prev_purple_tracker_ids:
+      for tracker_id in tracker_ids:
+        if tracker_id in prev_tracks and prev_tracks[int(tracker_id)]["is_new"]:
           closest_robot_id = None
           closest_robot_dist = float('inf')
           for robot_id, robot_track in robot_tracker.tracks.items():
-            dist = np.linalg.norm(robot_track["coords"] - purple_tracker.tracks[int(tracker_id)]["coords"])
+            dist = np.linalg.norm(robot_track["coords"] - (prev_tracks[int(tracker_id)]["coords"] - 3*tracks[int(tracker_id)]["velocity"]))
             if dist < closest_robot_dist:
               closest_robot_dist = dist
               closest_robot_id = robot_id
           if closest_robot_id is not None and closest_robot_dist < 100:
-            artifact_id_to_robot_id[("purple", tracker_id)] = closest_robot_id
-
+            artifact_id_to_robot_id[(color, tracker_id)] = closest_robot_id
+        if tracker_id not in prev_tracker_ids:
           to_remove.add(tracker_id)
           for lz_index, launch_zone in enumerate(LAUNCH_ZONES):
             in_launch_zone = cv2.pointPolygonTest(
-              launch_zone, (purple_tracker.tracks[int(tracker_id)]["coords"][0], purple_tracker.tracks[int(tracker_id)]["coords"][1]), False
+              launch_zone, (tracks[int(tracker_id)]["coords"][0], tracks[int(tracker_id)]["coords"][1]), False
             ) >= 0
             if in_launch_zone:
               to_remove.remove(tracker_id)
       for tracker_id in to_remove:
-        del purple_tracker.tracks[tracker_id]
-      purple_detections = [c for c, tracker_id in zip(purple_detections, purple_tracker_ids) if tracker_id not in to_remove]
-      purple_tracker_ids = np.array([tracker_id for tracker_id in purple_tracker_ids if tracker_id not in to_remove])
+        del tracks[tracker_id]
+      tracker_ids = np.array([tracker_id for tracker_id in tracker_ids if tracker_id not in to_remove])
+      detections = [c for c, tracker_id in zip(detections, tracker_ids) if tracker_id not in to_remove]
+      return tracker_ids, detections
+
+    if prev_purple_tracker_ids is not None:
+      assert prev_purple_tracks is not None
+      handle_tracker_removals(prev_purple_tracker_ids, prev_purple_tracks, purple_tracker_ids, "purple")
+      purple_tracker_ids, purple_detections = handle_tracker_additions(prev_purple_tracker_ids, prev_purple_tracks, purple_tracker_ids, purple_tracker.tracks, purple_detections, "purple")
 
     if prev_green_tracker_ids is not None:
       assert prev_green_tracks is not None
-      for tracker_id in prev_green_tracker_ids:
-        if tracker_id not in green_tracker_ids:
-          for goal_index, goal in enumerate(GOAL_ZONES):
-            in_goal = cv2.pointPolygonTest(
-              goal, (prev_green_tracks[int(tracker_id)]["coords"][0], prev_green_tracks[int(tracker_id)]["coords"][1]), False
-            ) >= 0
-            if in_goal:
-              scores.append((frame_index, "green", goal_index, artifact_id_to_robot_id[("green", tracker_id)] if ("green", tracker_id) in artifact_id_to_robot_id else None))
-      to_remove = set()
-      for tracker_id in green_tracker_ids:
-        if tracker_id not in prev_green_tracker_ids:
-          closest_robot_id = None
-          closest_robot_dist = float('inf')
-          for robot_id, robot_track in robot_tracker.tracks.items():
-            dist = np.linalg.norm(robot_track["coords"] - green_tracker.tracks[int(tracker_id)]["coords"])
-            if dist < closest_robot_dist:
-              closest_robot_dist = dist
-              closest_robot_id = robot_id
-          if closest_robot_id is not None and closest_robot_dist < 100:
-            artifact_id_to_robot_id[("green", tracker_id)] = closest_robot_id
-
-          to_remove.add(tracker_id)
-          for lz_index, launch_zone in enumerate(LAUNCH_ZONES):
-            in_launch_zone = cv2.pointPolygonTest(
-              launch_zone, (green_tracker.tracks[int(tracker_id)]["coords"][0], green_tracker.tracks[int(tracker_id)]["coords"][1]), False
-            ) >= 0
-            if in_launch_zone:
-              to_remove.remove(tracker_id)
-      for tracker_id in to_remove:
-        del green_tracker.tracks[tracker_id]
-      green_detections = [c for c, tracker_id in zip(green_detections, green_tracker_ids) if tracker_id not in to_remove]
-      green_tracker_ids = np.array([tracker_id for tracker_id in green_tracker_ids if tracker_id not in to_remove])
+      handle_tracker_removals(prev_green_tracker_ids, prev_green_tracks, green_tracker_ids, "green")
+      green_tracker_ids, green_detections = handle_tracker_additions(prev_green_tracker_ids, prev_green_tracks, green_tracker_ids, green_tracker.tracks, green_detections, "green")
 
     print(f"{time.time()}: Scored/Filtered")
 
